@@ -82,6 +82,22 @@ class TestGetGpuInfoNvidia:
         assert info.power_w == 285.5
         assert info.gpu_backend == "nvidia"
 
+    def test_handles_float_temperature(self, monkeypatch):
+        # Driver 620.x nvidia-smi emits whole-number temps with decimals
+        # ("36.60"); int("36.60") previously crashed the parse and made
+        # get_gpu_info() return None (dashboard then fell back to 4 GB).
+        csv = "NVIDIA GeForce RTX 4070 Ti SUPER, 7508, 16376, 14, 36.60, 11.58"
+        monkeypatch.setattr("gpu.run_command", lambda cmd, **kw: (True, csv))
+
+        info = get_gpu_info_nvidia()
+        assert info is not None
+        assert info.name == "NVIDIA GeForce RTX 4070 Ti SUPER"
+        assert info.memory_used_mb == 7508
+        assert info.memory_total_mb == 16376
+        assert info.utilization_percent == 14
+        assert info.temperature_c == 36
+        assert info.power_w == 11.6
+
     def test_handles_na_power(self, monkeypatch):
         csv = "Tesla T4, 1024, 16384, 10, 45, [N/A]"
         monkeypatch.setattr("gpu.run_command", lambda cmd, **kw: (True, csv))

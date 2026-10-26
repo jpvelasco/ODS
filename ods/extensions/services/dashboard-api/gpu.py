@@ -28,6 +28,20 @@ def run_command(cmd: list[str], timeout: int = 5) -> tuple[bool, str]:
         return False, str(e)
 
 
+def _to_int(value: str, default: int = 0) -> int:
+    """Parse an integer field, tolerating float-formatted output.
+
+    Some nvidia-smi versions emit whole numbers with decimals
+    (temperature.gpu -> "36.60"); int("36.60") would crash the row.
+    """
+    if value in ("[N/A]", "[Not Supported]", "N/A", "Not Supported", ""):
+        return default
+    try:
+        return int(float(value))
+    except (ValueError, TypeError):
+        return default
+
+
 def _read_sysfs(path: str) -> Optional[str]:
     """Read a sysfs file, returning None on failure."""
     try:
@@ -191,10 +205,10 @@ def get_gpu_info_nvidia() -> Optional[GPUInfo]:
                 mem_used = 0
                 any_unified = True
             else:
-                mem_used = int(parts[1])
-                mem_total = int(parts[2])
-            util = int(parts[3]) if parts[3] not in na_values else 0
-            temp = int(parts[4]) if parts[4] not in na_values else 0
+                mem_used = _to_int(parts[1])
+                mem_total = _to_int(parts[2])
+            util = _to_int(parts[3])
+            temp = _to_int(parts[4])
             gpus.append({
                 "name": parts[0],
                 "mem_used": mem_used,
@@ -674,18 +688,18 @@ def get_gpu_info_nvidia_detailed() -> Optional[list[IndividualGPU]]:
                 _, mem_total = fallback
                 mem_used = 0
             else:
-                mem_used = int(parts[3])
-                mem_total = int(parts[4])
+                mem_used = _to_int(parts[3])
+                mem_total = _to_int(parts[4])
             uuid = parts[1]
             gpus.append(IndividualGPU(
-                index=int(parts[0]),
+                index=_to_int(parts[0]),
                 uuid=uuid,
                 name=parts[2],
                 memory_used_mb=mem_used,
                 memory_total_mb=mem_total,
                 memory_percent=round(mem_used / mem_total * 100, 1) if mem_total > 0 else 0.0,
-                utilization_percent=int(parts[5]) if parts[5] not in na_values else 0,
-                temperature_c=int(parts[6]) if parts[6] not in na_values else 0,
+                utilization_percent=_to_int(parts[5]),
+                temperature_c=_to_int(parts[6]),
                 power_w=power_w,
                 assigned_services=uuid_service_map.get(uuid, []),
                 memory_usage_available=not unified,

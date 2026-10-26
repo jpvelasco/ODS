@@ -171,6 +171,24 @@ class TestGetGpuInfoNvidiaDetailed:
         assert g.utilization_available is False
         assert g.temperature_available is False
 
+    def test_handles_float_temperature(self, monkeypatch):
+        # Driver 620.x nvidia-smi emits whole-number temps with decimals
+        # ("36.60"); int("36.60") previously crashed the row parse.
+        csv = "0, GPU-ce5b5d5a, NVIDIA GeForce RTX 4070 Ti SUPER, 13381, 16376, 5, 36.60, 11.54"
+        monkeypatch.setattr("gpu.run_command", lambda cmd, **kw: (True, csv))
+        monkeypatch.delenv("GPU_ASSIGNMENT_JSON_B64", raising=False)
+
+        result = get_gpu_info_nvidia_detailed()
+        assert result is not None and len(result) == 1
+        g = result[0]
+        assert g.name == "NVIDIA GeForce RTX 4070 Ti SUPER"
+        assert g.memory_used_mb == 13381
+        assert g.memory_total_mb == 16376
+        assert g.utilization_percent == 5
+        assert g.temperature_c == 36
+        assert g.temperature_available is True
+        assert g.power_w == 11.5
+
     def test_parses_multi_gpu(self, monkeypatch):
         csv = (
             "0, GPU-aaa, NVIDIA GeForce RTX 4090, 2048, 24564, 35, 62, 285.5\n"
